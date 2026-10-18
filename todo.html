@@ -3,75 +3,119 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Todo 列表 · V2.0 基础版</title>
+  <title>Todo 列表 · V2.0 数据驱动（阶段1：数据层）</title>
   <style>
+    :root {
+      --primary: #4874CB;
+      --text-main: #333;
+      --text-sub: #888;
+      --border: #e0e0e0;
+      --bg-item: #f5f7fb;
+      --radius: 6px;
+    }
     * { box-sizing: border-box; }
     body {
       font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;
       max-width: 480px;
       margin: 40px auto;
       padding: 0 16px;
-      color: #333;
+      color: var(--text-main);
     }
-    h1 { color: #4874CB; font-size: 24px; }
-    .hint { color: #888; font-size: 13px; margin-bottom: 16px; }
-    .todo-input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    h1 { color: var(--primary); font-size: 24px; }
+    .hint { color: var(--text-sub); font-size: 13px; margin-bottom: 16px; }
+    .todo-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
     #todo-input {
       flex: 1;
       padding: 10px 12px;
       border: 1px solid #ccc;
-      border-radius: 6px;
+      border-radius: var(--radius);
       font-size: 16px;
     }
     #add-btn {
       padding: 10px 20px;
       border: none;
-      background: #4874CB;
+      background: var(--primary);
       color: #fff;
-      border-radius: 6px;
+      border-radius: var(--radius);
       font-size: 16px;
       cursor: pointer;
     }
     #add-btn:hover { background: #3a5fa8; }
     #todo-list { list-style: none; padding: 0; margin: 0; }
     #todo-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       padding: 10px 12px;
-      background: #f5f7fb;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
+      background: var(--bg-item);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       margin-bottom: 8px;
     }
+    .todo-text { flex: 1; font-size: 15px; }
+    .empty-tip { text-align: center; color: var(--text-sub); font-size: 14px; padding: 20px 0; }
   </style>
 </head>
 <body>
   <h1>我的待办清单</h1>
-  <p class="hint">V2.0 基础版 · 只支持「添加 + 显示」（第6周成果，作为本周重构起点）</p>
+  <p class="hint">V2.0 数据驱动 · 阶段1：建立数据层与持久化</p>
+
   <div class="todo-input-row">
     <input type="text" id="todo-input" placeholder="输入待办事项">
     <button id="add-btn">添加</button>
   </div>
+
   <ul id="todo-list"></ul>
 
   <script>
-    // 第6周版本：DOM 直接操作——每次点击创建 li 并 appendChild
-    // 问题：数据没有独立存储，刷新即丢失；无法删除/筛选/持久化
+    /* ============ 数据层：唯一数据源 ============ */
+    let todos = [];
+
     const input = document.querySelector('#todo-input');
-    const button = document.querySelector('#add-btn');
+    const addBtn = document.querySelector('#add-btn');
     const list = document.querySelector('#todo-list');
 
-    if (input && button && list) {
-      button.addEventListener('click', function () {
+    /* ============ 持久化：保存与恢复 ============ */
+    function save() {
+      localStorage.setItem('todos', JSON.stringify(todos));
+    }
+
+    function load() {
+      const raw = localStorage.getItem('todos');
+      // 边界检查：localStorage 可能为空或存了非法 JSON
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) todos = parsed;
+      } catch (e) {
+        console.warn('本地数据解析失败，已忽略', e);
+      }
+    }
+
+    /* 阶段1 暂时仍用 DOM 直接创建，阶段2 再抽出 render() */
+    if (input && addBtn && list) {
+      addBtn.addEventListener('click', function () {
         const text = input.value.trim();
         if (text === '') return;
 
+        // 改数据：展开新对象进数组（不用 push，避免就地修改原数组）
+        todos = [...todos, { id: Date.now(), text: text, done: false }];
+        save();   // 保存
+
         const li = document.createElement('li');
-        li.textContent = text;
+        const span = document.createElement('span');
+        span.className = 'todo-text';
+        span.textContent = text;
+        li.appendChild(span);
         list.appendChild(li);
 
         input.value = '';
         input.focus();
       });
     }
+
+    // 初始化：先恢复数据，再交给渲染
+    load();
   </script>
 </body>
 </html>
