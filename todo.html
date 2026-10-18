@@ -113,7 +113,7 @@
     <button class="filter-btn active" data-filter="all">全部</button>
     <button class="filter-btn" data-filter="active">未完成</button>
     <button class="filter-btn" data-filter="done">已完成</button>
-    <!-- <button id="clear-btn">清除已完成</button> -->
+    <button id="clear-btn">清除已完成</button>
   </div>
 
   <ul id="todo-list"></ul>
@@ -126,6 +126,7 @@
     const input = document.querySelector('#todo-input');
     const addBtn = document.querySelector('#add-btn');
     const list = document.querySelector('#todo-list');
+    const clearBtn = document.querySelector('#clear-btn');
     
     const filterBtns = document.querySelectorAll('.filter-btn');
 
@@ -171,6 +172,14 @@
       todos = todos.map(t =>
         t.id === id ? { ...t, done: !t.done } : t
       );
+      save();
+      render();
+    }
+
+    // 4) 清除已完成：删除数组中所有 done 为 true 的项
+    //    思路：保留未完成的（!t.done），即用 filter 生成新数组
+    function clearCompleted() {
+      todos = todos.filter(t => !t.done);
       save();
       render();
     }
@@ -233,6 +242,8 @@
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') addBtn.click();
     });
+
+    clearBtn.addEventListener('click', clearCompleted);
 
     filterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
