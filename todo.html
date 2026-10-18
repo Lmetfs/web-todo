@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Todo 列表 · V2.0 数据驱动（阶段1：数据层）</title>
+  <title>Todo 列表 · V2.0 完整版（数据驱动）</title>
   <style>
     :root {
       --primary: #4874CB;
@@ -23,6 +23,7 @@
     }
     h1 { color: var(--primary); font-size: 24px; }
     .hint { color: var(--text-sub); font-size: 13px; margin-bottom: 16px; }
+
     .todo-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
     #todo-input {
       flex: 1;
@@ -41,6 +42,36 @@
       cursor: pointer;
     }
     #add-btn:hover { background: #3a5fa8; }
+
+    /* 筛选栏 */
+    .filter-row { display: flex; gap: 6px; margin-bottom: 16px; }
+    .filter-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: var(--radius);
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-sub);
+    }
+    .filter-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    #clear-btn {
+      margin-left: auto;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: var(--radius);
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-sub);
+    }
+    #clear-btn:hover { color: #c0392b; border-color: #c0392b; }
+
+    /* 列表 */
     #todo-list { list-style: none; padding: 0; margin: 0; }
     #todo-list li {
       display: flex;
@@ -52,17 +83,37 @@
       border-radius: var(--radius);
       margin-bottom: 8px;
     }
+    #todo-list li.done .todo-text {
+      text-decoration: line-through;
+      color: var(--text-sub);
+    }
     .todo-text { flex: 1; font-size: 15px; }
+    .del-btn {
+      border: none;
+      background: none;
+      color: var(--text-sub);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 4px 6px;
+    }
+    .del-btn:hover { color: #c0392b; }
     .empty-tip { text-align: center; color: var(--text-sub); font-size: 14px; padding: 20px 0; }
   </style>
 </head>
 <body>
   <h1>我的待办清单</h1>
-  <p class="hint">V2.0 数据驱动 · 阶段1：建立数据层与持久化</p>
+  <p class="hint">V2.0 完整版 · 数据驱动（改数据 → 保存 → 重渲染）</p>
 
   <div class="todo-input-row">
     <input type="text" id="todo-input" placeholder="输入待办事项">
     <button id="add-btn">添加</button>
+  </div>
+
+  <div class="filter-row">
+    <button class="filter-btn active" data-filter="all">全部</button>
+    <button class="filter-btn" data-filter="active">未完成</button>
+    <button class="filter-btn" data-filter="done">已完成</button>
+    <!-- <button id="clear-btn">清除已完成</button> -->
   </div>
 
   <ul id="todo-list"></ul>
@@ -70,10 +121,13 @@
   <script>
     /* ============ 数据层：唯一数据源 ============ */
     let todos = [];
+    let currentFilter = 'all';   // 'all' | 'active' | 'done'
 
     const input = document.querySelector('#todo-input');
     const addBtn = document.querySelector('#add-btn');
     const list = document.querySelector('#todo-list');
+    
+    const filterBtns = document.querySelectorAll('.filter-btn');
 
     /* ============ 持久化：保存与恢复 ============ */
     function save() {
@@ -92,30 +146,106 @@
       }
     }
 
-    /* 阶段1 暂时仍用 DOM 直接创建，阶段2 再抽出 render() */
-    if (input && addBtn && list) {
-      addBtn.addEventListener('click', function () {
-        const text = input.value.trim();
-        if (text === '') return;
+    /* ============ 三个操作函数：改数据 → 保存 → 重渲染 ============ */
+    // 1) 添加：用展开 [...todos, newItem] 生成新数组，不 push
+    function addTodo(text) {
+      const newTodo = {
+        id: Date.now(),
+        text: text,
+        done: false
+      };
+      todos = [...todos, newTodo];
+      save();
+      render();
+    }
 
-        // 改数据：展开新对象进数组（不用 push，避免就地修改原数组）
-        todos = [...todos, { id: Date.now(), text: text, done: false }];
-        save();   // 保存
+    // 2) 删除：用 filter 生成新数组（天然排除目标项），不 splice
+    function removeTodo(id) {
+      todos = todos.filter(t => t.id !== id);
+      save();
+      render();
+    }
 
+    // 3) 切换完成状态：用 map 生成新数组 + 展开覆盖命中的那项，不用 forEach 就地改
+    function toggleTodo(id) {
+      todos = todos.map(t =>
+        t.id === id ? { ...t, done: !t.done } : t
+      );
+      save();
+      render();
+    }
+
+    /* ============ 渲染层：只读数据，不改数据 ============ */
+    function render() {
+      // 第一步：根据 currentFilter 得到要显示的数组（filter 生成新数组）
+      const visible = todos.filter(t => {
+        if (currentFilter === 'active') return !t.done;
+        if (currentFilter === 'done') return t.done;
+        return true;
+      });
+
+      // 第二步：清空并重建 DOM
+      list.innerHTML = '';
+
+      if (visible.length === 0) {
+        const tip = document.createElement('p');
+        tip.className = 'empty-tip';
+        tip.textContent = currentFilter === 'done' ? '还没有已完成的任务' : '暂无任务，添加一条吧';
+        list.appendChild(tip);
+        return;
+      }
+
+      // 第三步：逐项建元素并挂载
+      visible.forEach(todo => {
         const li = document.createElement('li');
+        if (todo.done) li.classList.add('done');
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = todo.done;
+        checkbox.addEventListener('change', () => toggleTodo(todo.id));
+
         const span = document.createElement('span');
         span.className = 'todo-text';
-        span.textContent = text;
-        li.appendChild(span);
-        list.appendChild(li);
+        span.textContent = todo.text;   // 纯文本渲染，杜绝 XSS
 
-        input.value = '';
-        input.focus();
+        const delBtn = document.createElement('button');
+        delBtn.className = 'del-btn';
+        delBtn.textContent = '删除';
+        delBtn.addEventListener('click', () => removeTodo(todo.id));
+
+        li.appendChild(checkbox);
+        li.appendChild(span);
+        li.appendChild(delBtn);
+        list.appendChild(li);
       });
     }
 
-    // 初始化：先恢复数据，再交给渲染
+    /* ============ 事件绑定 ============ */
+    addBtn.addEventListener('click', () => {
+      const text = input.value.trim();
+      if (text === '') return;
+      addTodo(text);
+      input.value = '';
+      input.focus();
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') addBtn.click();
+    });
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        render();
+      });
+    });
+
+    /* ============ 初始化：先恢复数据，再渲染 ============ */
     load();
+    render();
   </script>
 </body>
 </html>
