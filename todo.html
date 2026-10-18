@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo 列表 · V2.0 基础版</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;
+      max-width: 480px;
+      margin: 40px auto;
+      padding: 0 16px;
+      color: #333;
+    }
+    h1 { color: #4874CB; font-size: 24px; }
+    .hint { color: #888; font-size: 13px; margin-bottom: 16px; }
+    .todo-input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    #todo-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    #add-btn {
+      padding: 10px 20px;
+      border: none;
+      background: #4874CB;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #add-btn:hover { background: #3a5fa8; }
+    #todo-list { list-style: none; padding: 0; margin: 0; }
+    #todo-list li {
+      padding: 10px 12px;
+      background: #f5f7fb;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>我的待办清单</h1>
+  <p class="hint">V2.0 基础版 · 只支持「添加 + 显示」（第6周成果，作为本周重构起点）</p>
+  <div class="todo-input-row">
+    <input type="text" id="todo-input" placeholder="输入待办事项">
+    <button id="add-btn">添加</button>
+  </div>
+  <ul id="todo-list"></ul>
+
+  <script>
+    // 第6周版本：DOM 直接操作——每次点击创建 li 并 appendChild
+    // 问题：数据没有独立存储，刷新即丢失；无法删除/筛选/持久化
+    const input = document.querySelector('#todo-input');
+    const button = document.querySelector('#add-btn');
+    const list = document.querySelector('#todo-list');
+
+    if (input && button && list) {
+      button.addEventListener('click', function () {
+        const text = input.value.trim();
+        if (text === '') return;
+
+        const li = document.createElement('li');
+        li.textContent = text;
+        list.appendChild(li);
+
+        input.value = '';
+        input.focus();
+      });
+    }
+  </script>
+</body>
+</html>
