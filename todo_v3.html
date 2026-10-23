@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Todo 列表 · V2.0 完整版（数据驱动）</title>
+  <title>Todo 列表 · V3.0（事件委托重构）</title>
   <style>
     :root {
       --primary: #4874CB;
@@ -43,7 +43,6 @@
     }
     #add-btn:hover { background: #3a5fa8; }
 
-    /* 筛选栏 */
     .filter-row { display: flex; gap: 6px; margin-bottom: 16px; }
     .filter-btn {
       padding: 6px 14px;
@@ -71,7 +70,6 @@
     }
     #clear-btn:hover { color: #c0392b; border-color: #c0392b; }
 
-    /* 列表 */
     #todo-list { list-style: none; padding: 0; margin: 0; }
     #todo-list li {
       display: flex;
@@ -82,10 +80,17 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       margin-bottom: 8px;
+      /* 淡出动画：给删除留出可见的过渡时间 */
+      transition: opacity .15s ease, transform .15s ease;
     }
     #todo-list li.done .todo-text {
       text-decoration: line-through;
       color: var(--text-sub);
+    }
+    /* 正在被删除：先淡出，再真正从数据层移除 */
+    #todo-list li.removing {
+      opacity: 0;
+      transform: translateX(16px);
     }
     .todo-text { flex: 1; font-size: 15px; }
     .del-btn {
@@ -102,7 +107,7 @@
 </head>
 <body>
   <h1>我的待办清单</h1>
-  <p class="hint">V2.0 完整版 · 数据驱动（改数据 → 保存 → 重渲染）</p>
+  <p class="hint">V3.0 · 事件委托重构（父容器统一处理删除与切换）</p>
 
   <div class="todo-input-row">
     <input type="text" id="todo-input" placeholder="输入待办事项">
@@ -127,7 +132,6 @@
     const addBtn = document.querySelector('#add-btn');
     const list = document.querySelector('#todo-list');
     const clearBtn = document.querySelector('#clear-btn');
-    
     const filterBtns = document.querySelectorAll('.filter-btn');
 
     /* ============ 持久化：保存与恢复 ============ */
@@ -137,7 +141,6 @@
 
     function load() {
       const raw = localStorage.getItem('todos');
-      // 边界检查：localStorage 可能为空或存了非法 JSON
       if (!raw) return;
       try {
         const parsed = JSON.parse(raw);
@@ -147,8 +150,7 @@
       }
     }
 
-    /* ============ 三个操作函数：改数据 → 保存 → 重渲染 ============ */
-    // 1) 添加：用展开 [...todos, newItem] 生成新数组，不 push
+    /* ============ 操作函数：改数据 → 保存 → 重渲染 ============ */
     function addTodo(text) {
       const newTodo = {
         id: Date.now(),
@@ -160,24 +162,29 @@
       render();
     }
 
-    // 2) 删除：用 filter 生成新数组（天然排除目标项），不 splice
-    function removeTodo(id) {
-      todos = todos.filter(t => t.id !== id);
-      save();
-      render();
+    // 删除：先做淡出动画，动画结束后再从数据层移除
+    function deleteTodo(id) {
+      console.log('[deleteTodo] 被调用, id =', id, '| 删除前 todos 长度 =', todos.length);
+      const li = list.querySelector('li[data-id="' + id + '"]');
+      if (li) li.classList.add('removing');
+      setTimeout(() => {
+        todos = todos.filter(t => t.id !== id);
+        save();
+        render();
+        console.log('[deleteTodo] 已完成移除, id =', id, '| 删除后 todos 长度 =', todos.length);
+      }, 150);
     }
 
-    // 3) 切换完成状态：用 map 生成新数组 + 展开覆盖命中的那项，不用 forEach 就地改
     function toggleTodo(id) {
+      console.log('[toggleTodo] 被调用, id =', id, '| 切换前 todos 长度 =', todos.length);
       todos = todos.map(t =>
         t.id === id ? { ...t, done: !t.done } : t
       );
       save();
       render();
+      console.log('[toggleTodo] 已完成切换, id =', id);
     }
 
-    // 4) 清除已完成：删除数组中所有 done 为 true 的项
-    //    思路：保留未完成的（!t.done），即用 filter 生成新数组
     function clearCompleted() {
       todos = todos.filter(t => !t.done);
       save();
@@ -186,14 +193,12 @@
 
     /* ============ 渲染层：只读数据，不改数据 ============ */
     function render() {
-      // 第一步：根据 currentFilter 得到要显示的数组（filter 生成新数组）
       const visible = todos.filter(t => {
         if (currentFilter === 'active') return !t.done;
         if (currentFilter === 'done') return t.done;
         return true;
       });
 
-      // 第二步：清空并重建 DOM
       list.innerHTML = '';
 
       if (visible.length === 0) {
@@ -204,24 +209,28 @@
         return;
       }
 
-      // 第三步：逐项建元素并挂载
       visible.forEach(todo => {
         const li = document.createElement('li');
+        // 关键：把 id 挂到 li 的 dataset 上，事件委托靠它反查任务
+        li.dataset.id = todo.id;
         if (todo.done) li.classList.add('done');
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = todo.done;
-        checkbox.addEventListener('change', () => toggleTodo(todo.id));
+        // 不再逐项绑定 change，交给父容器的 change 委托统一处理
 
         const span = document.createElement('span');
         span.className = 'todo-text';
-        span.textContent = todo.text;   // 纯文本渲染，杜绝 XSS
+        span.textContent = todo.text;
 
         const delBtn = document.createElement('button');
         delBtn.className = 'del-btn';
-        delBtn.textContent = '删除';
-        delBtn.addEventListener('click', () => removeTodo(todo.id));
+        // 关键：删除按钮用 data-action 标记，委托时据此分流
+        delBtn.dataset.action = 'delete';
+        // 删除按钮里再套一层 span，模拟"点按钮里的图标"这个边界场景
+        delBtn.innerHTML = '<span class="del-icon">✕</span> 删除';
+        // 不再逐项绑定 click，交给父容器的 click 委托统一处理
 
         li.appendChild(checkbox);
         li.appendChild(span);
@@ -230,7 +239,45 @@
       });
     }
 
-    /* ============ 事件绑定 ============ */
+    /* ============ 事件委托：删除与切换统一交给父容器 ============ */
+    list.addEventListener('click', (e) => {
+      // 边界防御 1：点击目标可能不是 Element（比如点到文本节点）
+      if (!(e.target instanceof Element)) return;
+
+      // 边界防御 2：closest 可能返回 null（点到列表空白处）
+      const item = e.target.closest('li');
+      if (!item || !list.contains(item)) return;
+
+      // 边界防御 3：dataset.id 读出来一定是字符串，必须转成数字才能和 todo.id 严格相等
+      const id = Number(item.dataset.id);
+      if (!id) return;
+
+      // 判断是不是点了删除操作
+      const delBtn = e.target.closest('[data-action="delete"]');
+      if (delBtn && item.contains(delBtn)) {
+        deleteTodo(id);
+        return;              // 操作分流：删除后立即返回，不再走下面的切换分支
+      }
+
+      // 点复选框由 change 委托处理，这里直接放行，避免一次点击触发两次切换
+      if (e.target.closest('input[type="checkbox"]')) return;
+
+      // 其余情况（点任务文字）= 切换完成状态
+      toggleTodo(id);
+    });
+
+    list.addEventListener('change', (e) => {
+      if (!(e.target instanceof Element)) return;
+      const box = e.target.closest('input[type="checkbox"]');
+      if (!box) return;
+      const item = box.closest('li');
+      if (!item || !list.contains(item)) return;
+      const id = Number(item.dataset.id);
+      if (!id) return;
+      toggleTodo(id);
+    });
+
+    /* ============ 其他按钮：不属于列表，不走委托 ============ */
     addBtn.addEventListener('click', () => {
       const text = input.value.trim();
       if (text === '') return;
@@ -254,7 +301,6 @@
       });
     });
 
-    /* ============ 初始化：先恢复数据，再渲染 ============ */
     load();
     render();
   </script>

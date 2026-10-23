@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo 列表 · V3.0（事件委托重构）</title>
+  <style>
+    :root {
+      --primary: #4874CB;
+      --text-main: #333;
+      --text-sub: #888;
+      --border: #e0e0e0;
+      --bg-item: #f5f7fb;
+      --radius: 6px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;
+      max-width: 480px;
+      margin: 40px auto;
+      padding: 0 16px;
+      color: var(--text-main);
+    }
+    h1 { color: var(--primary); font-size: 24px; }
+    .hint { color: var(--text-sub); font-size: 13px; margin-bottom: 16px; }
+
+    .todo-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    #todo-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: var(--radius);
+      font-size: 16px;
+    }
+    #add-btn {
+      padding: 10px 20px;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      border-radius: var(--radius);
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #add-btn:hover { background: #3a5fa8; }
+
+    .filter-row { display: flex; gap: 6px; margin-bottom: 16px; }
+    .filter-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: var(--radius);
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-sub);
+    }
+    .filter-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    #clear-btn {
+      margin-left: auto;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: var(--radius);
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-sub);
+    }
+    #clear-btn:hover { color: #c0392b; border-color: #c0392b; }
+
+    #todo-list { list-style: none; padding: 0; margin: 0; }
+    #todo-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-item);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      /* 淡出动画：给删除留出可见的过渡时间 */
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    #todo-list li.done .todo-text {
+      text-decoration: line-through;
+      color: var(--text-sub);
+    }
+    /* 正在被删除：先淡出，再真正从数据层移除 */
+    #todo-list li.removing {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    .todo-text { flex: 1; font-size: 15px; }
+    /* 编辑态：input 顶替文字，样式对齐原文字 */
+    .edit-input {
+      flex: 1;
+      font-size: 15px;
+      padding: 3px 6px;
+      border: 1px solid var(--primary);
+      border-radius: 4px;
+      background: #fff;
+      color: var(--text-main);
+      font-family: inherit;
+    }
+    .edit-input:focus { outline: 2px solid #dbe6f8; }
+    /* 编辑中的那条给个提示 */
+    #todo-list li.editing { border-color: var(--primary); background: #eef2fb; }
+    .del-btn {
+      border: none;
+      background: none;
+      color: var(--text-sub);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 4px 6px;
+    }
+    .del-btn:hover { color: #c0392b; }
+    .empty-tip { text-align: center; color: var(--text-sub); font-size: 14px; padding: 20px 0; }
+  </style>
+</head>
+<body>
+  <h1>我的待办清单</h1>
+  <p class="hint">V3.0 · 事件委托重构（父容器统一处理删除与切换）</p>
+
+  <div class="todo-input-row">
+    <input type="text" id="todo-input" placeholder="输入待办事项">
+    <button id="add-btn">添加</button>
+  </div>
+
+  <div class="filter-row">
+    <button class="filter-btn active" data-filter="all">全部</button>
+    <button class="filter-btn" data-filter="active">未完成</button>
+    <button class="filter-btn" data-filter="done">已完成</button>
+    <button id="clear-btn">清除已完成</button>
+  </div>
+
+  <ul id="todo-list"></ul>
+
+  <script>
+    /* ============ 数据层：唯一数据源 ============ */
+    let todos = [];
+    let currentFilter = 'all';   // 'all' | 'active' | 'done'
+
+    const input = document.querySelector('#todo-input');
+    const addBtn = document.querySelector('#add-btn');
+    const list = document.querySelector('#todo-list');
+    const clearBtn = document.querySelector('#clear-btn');
+    const filterBtns = document.querySelectorAll('.filter-btn');
+
+    /* ============ 持久化：保存与恢复 ============ */
+    function save() {
+      localStorage.setItem('todos', JSON.stringify(todos));
+    }
+
+    function load() {
+      const raw = localStorage.getItem('todos');
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) todos = parsed;
+      } catch (e) {
+        console.warn('本地数据解析失败，已忽略', e);
+      }
+    }
+
+    /* ============ 操作函数：改数据 → 保存 → 重渲染 ============ */
+    function addTodo(text) {
+      const newTodo = {
+        id: Date.now(),
+        text: text,
+        done: false
+      };
+      todos = [...todos, newTodo];
+      save();
+      render();
+    }
+
+    // 删除：先做淡出动画，动画结束后再从数据层移除
+    function deleteTodo(id) {
+      console.log('[deleteTodo] 被调用, id =', id, '| 删除前 todos 长度 =', todos.length);
+      const li = list.querySelector('li[data-id="' + id + '"]');
+      if (li) li.classList.add('removing');
+      setTimeout(() => {
+        todos = todos.filter(t => t.id !== id);
+        save();
+        render();
+        console.log('[deleteTodo] 已完成移除, id =', id, '| 删除后 todos 长度 =', todos.length);
+      }, 150);
+    }
+
+    function toggleTodo(id) {
+      console.log('[toggleTodo] 被调用, id =', id, '| 切换前 todos 长度 =', todos.length);
+      todos = todos.map(t =>
+        t.id === id ? { ...t, done: !t.done } : t
+      );
+      save();
+      render();
+      console.log('[toggleTodo] 已完成切换, id =', id);
+    }
+
+    function clearCompleted() {
+      todos = todos.filter(t => !t.done);
+      save();
+      render();
+    }
+
+    /* ============ 编辑分支：独立实现 ============ */
+    // 用一个变量记住"当前正在编辑哪一条"，避免用 id 去猜
+    let editingId = null;
+    // 主动提交/取消的标志位：用来防止 keydown 和 focusout 抢同一个 input。
+    // 键盘处理里会先把 settling 置为 true 并同步走完 DOM 操作，
+    // focusout 处理器看到它为 true 就直接跳过，避免重复提交和 replaceWith 报错。
+    let settling = false;
+
+    // 1) 进入编辑态：把任务文字换成 input，原文字暂存
+    function startEdit(id) {
+      // 已经在编辑另一条：先提交上一条，再开始新的
+      if (editingId !== null && editingId !== id) {
+        const cur = list.querySelector('.edit-input');
+        if (cur) commitEdit(editingId, cur.value);
+      }
+      if (editingId !== null) return;      // 同一条还在编辑中就不再重入
+      const todo = todos.find(t => t.id === id);
+      if (!todo) return;
+      editingId = id;
+
+      const li = list.querySelector('li[data-id="' + id + '"]');
+      if (!li) { editingId = null; return; }
+      const textSpan = li.querySelector('.todo-text');
+      if (!textSpan) { editingId = null; return; }
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'edit-input';
+      input.value = todo.text;
+      textSpan.replaceWith(input);
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    // 2) 提交编辑：把新文字写回数据层
+    function commitEdit(id, newText) {
+      settling = true;                    // 屏蔽随后的 focusout
+      const text = newText.trim();
+      // 空文本视为放弃编辑，不写入
+      if (text === '') {
+        cancelEdit(id);
+        settling = false;
+        return;
+      }
+      editingId = null;               // 先清状态，避免 render 后状态残留
+      todos = todos.map(t =>
+        t.id === id ? { ...t, text: text } : t
+      );
+      save();
+      render();
+      settling = false;
+    }
+
+    // 3) 取消编辑：还原成原来的文字
+    function cancelEdit(id) {
+      settling = true;                    // 屏蔽随后的 focusout
+      const li = list.querySelector('li[data-id="' + id + '"]');
+      if (li) {
+        const input = li.querySelector('.edit-input');
+        const todo = todos.find(t => t.id === id);
+        if (input && todo) {
+          const span = document.createElement('span');
+          span.className = 'todo-text';
+          span.textContent = todo.text;
+          input.replaceWith(span);
+        }
+      }
+      editingId = null;
+      settling = false;
+    }
+
+    // 4) 编辑态下按 Enter 提交、Esc 取消
+    function handleEditKey(e, id) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEdit(id, e.target.value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEdit(id);
+      }
+    }
+
+    /* ============ 渲染层：只读数据，不改数据 ============ */
+    function render() {
+      const visible = todos.filter(t => {
+        if (currentFilter === 'active') return !t.done;
+        if (currentFilter === 'done') return t.done;
+        return true;
+      });
+
+      list.innerHTML = '';
+
+      if (visible.length === 0) {
+        const tip = document.createElement('p');
+        tip.className = 'empty-tip';
+        tip.textContent = currentFilter === 'done' ? '还没有已完成的任务' : '暂无任务，添加一条吧';
+        list.appendChild(tip);
+        return;
+      }
+
+      visible.forEach(todo => {
+        const li = document.createElement('li');
+        // 关键：把 id 挂到 li 的 dataset 上，事件委托靠它反查任务
+        li.dataset.id = todo.id;
+        if (todo.done) li.classList.add('done');
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = todo.done;
+        // 不再逐项绑定 change，交给父容器的 change 委托统一处理
+
+        const span = document.createElement('span');
+        span.className = 'todo-text';
+        span.textContent = todo.text;
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'del-btn';
+        // 编辑按钮用 data-action 标记，委托时据此分流（实验1 P15/16 参考结构：if 删除 / else if 编辑 / else 切换）
+        editBtn.dataset.action = 'edit';
+        editBtn.textContent = '编辑';
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'del-btn';
+        // 关键：删除按钮用 data-action 标记，委托时据此分流
+        delBtn.dataset.action = 'delete';
+        // 删除按钮里再套一层 span，模拟"点按钮里的图标"这个边界场景
+        delBtn.innerHTML = '<span class="del-icon">✕</span> 删除';
+        // 不再逐项绑定 click，交给父容器的 click 委托统一处理
+
+        li.appendChild(checkbox);
+        li.appendChild(span);
+        li.appendChild(editBtn);
+        li.appendChild(delBtn);
+        list.appendChild(li);
+      });
+    }
+
+    /* ============ 事件委托：删除与切换统一交给父容器 ============ */
+    list.addEventListener('click', (e) => {
+      // 边界防御 1：点击目标可能不是 Element（比如点到文本节点）
+      if (!(e.target instanceof Element)) return;
+
+      // 边界防御 2：closest 可能返回 null（点到列表空白处）
+      const item = e.target.closest('li');
+      if (!item || !list.contains(item)) return;
+
+      // 边界防御 3：dataset.id 读出来一定是字符串，必须转成数字才能和 todo.id 严格相等
+      const id = Number(item.dataset.id);
+      if (!id) return;
+
+      // 分流 ①：删除操作（data-action="delete"）
+      const delBtn = e.target.closest('[data-action="delete"]');
+      if (delBtn && item.contains(delBtn)) {
+        // 边界：如果这一条正在编辑，先取消编辑再删，避免留下野指针
+        if (editingId === id) cancelEdit(id);
+        deleteTodo(id);
+        return;              // 操作分流：删除后立即返回，不再走下面的分支
+      }
+
+      // 分流 ②：编辑操作（data-action="edit"）—— 实验1 P15/16 参考结构
+      const editBtn = e.target.closest('[data-action="edit"]');
+      if (editBtn && item.contains(editBtn)) {
+        startEdit(id);
+        return;
+      }
+
+      // 点复选框由 change 委托处理，这里直接放行，避免一次点击触发两次切换
+      if (e.target.closest('input[type="checkbox"]')) return;
+
+      // 编辑进行中：点编辑框内部不动；点别处先把当前编辑提交掉（提交触发 render），不触发切换
+      if (editingId !== null) {
+        if (e.target.closest('.edit-input')) return;   // 点输入框内部：让用户继续编辑，别误提交
+        const currentInput = list.querySelector('.edit-input');
+        if (currentInput) commitEdit(editingId, currentInput.value);
+        return;
+      }
+
+      // 其余情况（点任务文字）= 切换完成状态（对应参考实现的 else 分支）
+      toggleTodo(id);
+    });
+
+    // 编辑框的键盘事件：Enter 提交、Esc 取消
+    list.addEventListener('keydown', (e) => {
+      if (!(e.target instanceof Element)) return;
+      const input = e.target.closest('.edit-input');
+      if (!input) return;
+      const item = input.closest('li');
+      if (!item) return;
+      const id = Number(item.dataset.id);
+      if (!id) return;
+      handleEditKey(e, id);
+    });
+
+    // 编辑框失焦：只有在焦点真正离开这一行时才提交。
+    // 注意：不能直接用 blur 提交，因为点击编辑框本身也会先触发一次 blur，
+    // 那样会在用户还没输入时就提交，把编辑内容冲掉。
+    list.addEventListener('focusout', (e) => {
+      if (!(e.target instanceof Element)) return;
+      // 键盘已经处理过（Enter/Esc）就不再重复处理
+      if (settling) return;
+      const input = e.target.closest('.edit-input');
+      if (!input) return;
+      const item = input.closest('li');
+      if (!item) return;
+      const id = Number(item.dataset.id);
+      if (!id || editingId !== id) return;
+      // 焦点还在这一行内（比如点到了同一个 input 内部），不提交
+      if (item.contains(e.relatedTarget)) return;
+      commitEdit(id, input.value);
+    });
+
+    list.addEventListener('change', (e) => {
+      if (!(e.target instanceof Element)) return;
+      const box = e.target.closest('input[type="checkbox"]');
+      if (!box) return;
+      const item = box.closest('li');
+      if (!item || !list.contains(item)) return;
+      const id = Number(item.dataset.id);
+      if (!id) return;
+      toggleTodo(id);
+    });
+
+    /* ============ 其他按钮：不属于列表，不走委托 ============ */
+    addBtn.addEventListener('click', () => {
+      const text = input.value.trim();
+      if (text === '') return;
+      addTodo(text);
+      input.value = '';
+      input.focus();
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') addBtn.click();
+    });
+
+    clearBtn.addEventListener('click', clearCompleted);
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        render();
+      });
+    });
+
+    load();
+    render();
+  </script>
+</body>
+</html>
