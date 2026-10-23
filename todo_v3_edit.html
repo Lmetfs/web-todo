@@ -215,7 +215,12 @@
 
     // 1) 进入编辑态：把任务文字换成 input，原文字暂存
     function startEdit(id) {
-      if (editingId !== null) return;      // 同时只允许编辑一条
+      // 已经在编辑另一条：先提交上一条，再开始新的
+      if (editingId !== null && editingId !== id) {
+        const cur = list.querySelector('.edit-input');
+        if (cur) commitEdit(editingId, cur.value);
+      }
+      if (editingId !== null) return;      // 同一条还在编辑中就不再重入
       const todo = todos.find(t => t.id === id);
       if (!todo) return;
       editingId = id;
@@ -315,6 +320,12 @@
         span.className = 'todo-text';
         span.textContent = todo.text;
 
+        const editBtn = document.createElement('button');
+        editBtn.className = 'del-btn';
+        // 编辑按钮用 data-action 标记，委托时据此分流（实验1 P15/16 参考结构：if 删除 / else if 编辑 / else 切换）
+        editBtn.dataset.action = 'edit';
+        editBtn.textContent = '编辑';
+
         const delBtn = document.createElement('button');
         delBtn.className = 'del-btn';
         // 关键：删除按钮用 data-action 标记，委托时据此分流
@@ -325,6 +336,7 @@
 
         li.appendChild(checkbox);
         li.appendChild(span);
+        li.appendChild(editBtn);
         li.appendChild(delBtn);
         list.appendChild(li);
       });
@@ -343,34 +355,35 @@
       const id = Number(item.dataset.id);
       if (!id) return;
 
-      // 判断是不是点了删除操作
+      // 分流 ①：删除操作（data-action="delete"）
       const delBtn = e.target.closest('[data-action="delete"]');
       if (delBtn && item.contains(delBtn)) {
         // 边界：如果这一条正在编辑，先取消编辑再删，避免留下野指针
         if (editingId === id) cancelEdit(id);
         deleteTodo(id);
-        return;              // 操作分流：删除后立即返回，不再走下面的切换分支
+        return;              // 操作分流：删除后立即返回，不再走下面的分支
+      }
+
+      // 分流 ②：编辑操作（data-action="edit"）—— 实验1 P15/16 参考结构
+      const editBtn = e.target.closest('[data-action="edit"]');
+      if (editBtn && item.contains(editBtn)) {
+        startEdit(id);
+        return;
       }
 
       // 点复选框由 change 委托处理，这里直接放行，避免一次点击触发两次切换
       if (e.target.closest('input[type="checkbox"]')) return;
 
-      // 正在编辑中的那条，点其他地方不触发任何事
+      // 编辑进行中：点编辑框内部不动；点别处先把当前编辑提交掉（提交触发 render），不触发切换
       if (editingId !== null) {
-        // 点到了另一条：先把当前编辑提交掉（提交会触发 render，DOM 重建）
+        if (e.target.closest('.edit-input')) return;   // 点输入框内部：让用户继续编辑，别误提交
         const currentInput = list.querySelector('.edit-input');
-        if (currentInput) {
-          const currentId = editingId;
-          commitEdit(currentId, currentInput.value);
-        }
+        if (currentInput) commitEdit(editingId, currentInput.value);
         return;
       }
 
-      // 其余情况（点任务文字）= 进入编辑态
-      if (e.target.closest('.todo-text')) {
-        startEdit(id);
-        return;
-      }
+      // 其余情况（点任务文字）= 切换完成状态（对应参考实现的 else 分支）
+      toggleTodo(id);
     });
 
     // 编辑框的键盘事件：Enter 提交、Esc 取消
