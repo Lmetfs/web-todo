@@ -68,4 +68,18 @@ describe('② 边界修补（9 维度查漏）', () => {
 
     expect(toTodoId('1001')).toBe(1001);
   });
+
+  // 维度 9（安全与注入防范）
+  it('维度9 安全：脚本标签按纯文本原样保存，数据层不改写内容', () => {
+    const todos: Todo[] = [];
+    const raw = '<img src=x onerror=alert(1)>';
+
+    addTodo(todos, raw);
+
+    // 分层约定：数据层只负责「存进去什么就是什么」，
+    // 编码交给渲染层的 textContent（W6 已定）。
+    // 这里若先转义一次、渲染层再转一次，就会变成双转义。
+    expect(todos.length).toBe(1);
+    expect(todos[0].text).toBe(raw);
+  });
 });
