@@ -2,5 +2,10 @@
 shot_*.png
 W7_*.png
 W8_*.png
+W9_*.png
 # 基础副本（与 W7 仓库重复，不重复入库）
 todo_v3_base.html
+# 依赖与构建产物
+node_modules/
+dist/
+coverage/
