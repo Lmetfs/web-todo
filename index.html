@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo · W10 工程化收尾</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>待办清单</h1>
+      <div class="row">
+        <input id="todo-input" type="text" placeholder="输入任务后点击添加" />
+        <button id="add-btn" type="button">添加</button>
+        <button id="clear-btn" type="button">清除已完成</button>
+      </div>
+      <ul id="todo-list"></ul>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

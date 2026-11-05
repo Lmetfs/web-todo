@@ -1,0 +1,23 @@
+{
+  "name": "todo-ts-vite",
+  "version": "1.0.0",
+  "description": "W10 V3.0 工程化收尾：Vite + TypeScript + ESLint + Vitest",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "author": "叶文锋",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^8.57.0",
+    "typescript": "~6.0.0",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
