@@ -60,11 +60,11 @@ describe('② 边界修补（9 维度查漏）', () => {
 
   // 维度 3（类型）
   it('维度3 类型：dataset 的脏 id 一律返回 null，合法 id 正确转换', () => {
-    expect(toTodoId('123abc')).toBeNull();  // 转换得 NaN
-    expect(toTodoId('1.5')).toBeNull();     // 不是安全整数
-    expect(toTodoId('')).toBeNull();        // Number('') 是 0，会被 <= 0 挡掉
+    expect(toTodoId('123abc')).toBeNull(); // 转换得 NaN
+    expect(toTodoId('1.5')).toBeNull(); // 不是安全整数
+    expect(toTodoId('')).toBeNull(); // Number('') 是 0，会被 <= 0 挡掉
     expect(toTodoId(undefined)).toBeNull(); // 元素上没有 data-id
-    expect(toTodoId('-5')).toBeNull();      // 负数
+    expect(toTodoId('-5')).toBeNull(); // 负数
 
     expect(toTodoId('1001')).toBe(1001);
   });

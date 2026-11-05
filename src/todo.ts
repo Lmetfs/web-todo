@@ -103,13 +103,13 @@ export function addTodo(todos: Todo[], text: string): void {
 
 /** 切换完成状态。契约：id 不存在时安静返回，不抛错、不崩溃。 */
 export function toggleTodo(todos: Todo[], id: number): void {
-  const target = todos.find(todo => todo.id === id);
+  const target = todos.find((todo) => todo.id === id);
   if (target === undefined) return;
   target.completed = !target.completed;
 }
 
 export function removeTodo(todos: Todo[], id: number): void {
-  const index = todos.findIndex(todo => todo.id === id);
+  const index = todos.findIndex((todo) => todo.id === id);
   if (index === -1) return;
   todos.splice(index, 1);
 }

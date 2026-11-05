@@ -1,8 +1,15 @@
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'Microsoft YaHei',
+    sans-serif;
   background: #f5f6f8;
   color: #1f2328;
 }
@@ -16,9 +23,16 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-h1 { margin: 0 0 16px; font-size: 22px; }
+h1 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
 
-.row { display: flex; gap: 8px; margin-bottom: 16px; }
+.row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
 
 #todo-input {
   flex: 1;
@@ -37,9 +51,15 @@ button {
   font-size: 14px;
 }
 
-button:hover { background: #f3f4f6; }
+button:hover {
+  background: #f3f4f6;
+}
 
-#todo-list { list-style: none; margin: 0; padding: 0; }
+#todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 
 #todo-list li {
   display: flex;
@@ -55,7 +75,7 @@ button:hover { background: #f3f4f6; }
   text-decoration: line-through;
 }
 
-#todo-list [data-action="delete"] {
+#todo-list [data-action='delete'] {
   color: #cf222e;
   border-color: #ffcecb;
 }

@@ -32,7 +32,7 @@ function save(): void {
 
 function render(): void {
   list.innerHTML = '';
-  todos.forEach(todo => {
+  todos.forEach((todo) => {
     const li = document.createElement('li');
     li.dataset.id = String(todo.id);
     if (todo.completed) li.classList.add('done');
@@ -57,7 +57,7 @@ function actionOf(target: EventTarget | null): 'delete' | 'toggle' {
 }
 
 // 一个监听器处理所有 li：识别 id → 分流操作 → 保存 → 重渲染
-list.addEventListener('click', event => {
+list.addEventListener('click', (event) => {
   const id = readTodoId(event.target);
   if (id === null) return;
 
