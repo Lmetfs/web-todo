@@ -109,3 +109,9 @@ test('localStorage：非法 JSON 与空值一律返回空数组', () => {
   expect(parseTodos('{not json').length).toBe(0);
   expect(parseTodos(null).length).toBe(0);
 });
+
+test('localStorage：非数组（对象 / null / 字符串）一律降级为空数组', () => {
+  expect(parseTodos('{"a":1}').length).toBe(0);
+  expect(parseTodos('null').length).toBe(0);
+  expect(parseTodos('"abc"').length).toBe(0);
+});
